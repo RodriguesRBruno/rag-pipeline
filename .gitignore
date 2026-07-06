@@ -2,6 +2,7 @@
 __pycache__/
 *.pyc
 .env
+.claude
 
 # Generated pipeline artifacts (reproducible via src.ingestion / src.embedding / src.vectorstore)
 data/
