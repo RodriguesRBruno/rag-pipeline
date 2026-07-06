@@ -1,24 +1,30 @@
 """Stage orchestration: RAGPipeline ties ingestion output, embeddings, the
 vector store, retrieval, and generation together behind a single interface.
 
-Assumes chunks, embeddings, and the Chroma vector store have already been
-built on disk (see src.ingestion, src.embedding, src.vectorstore). This
-module only loads/queries them; it does not (re)build them.
+`build_pipeline` builds whichever of chunks/embeddings/Chroma vector store
+are missing from disk (see src.ingestion, src.embedding, src.vectorstore),
+reusing anything already present, and returns a ready-to-query RAGPipeline.
 """
 
 from __future__ import annotations
 
 import logging
+from pathlib import Path
 from typing import Dict, List, Optional
 
 from tqdm import tqdm
 
-from src.embedding import MODEL_NAMES, load_embedding_model
+from src.embedding import MODEL_NAMES, embed_all_strategies, load_embedding_model
 from src.generation import Generator, GroundedResponse
+from src.ingestion import run_ingestion
 from src.retrieval import Retriever, RetrieverConfig
-from src.vectorstore import ChromaVectorStore
+from src.vectorstore import ChromaVectorStore, build_vectorstore
 
 logger = logging.getLogger(__name__)
+
+DEFAULT_DATA_DIR = Path("data")
+CHUNK_FILENAMES = ["chunks_semantic.json", "chunks_sentence.json"]
+STRATEGIES = ["semantic", "sentence"]
 
 
 class RAGPipeline:
@@ -139,3 +145,46 @@ class RAGPipeline:
         except Exception:
             logger.exception("Health check failed")
             return False
+
+
+def ensure_ingestion(data_dir: Path = DEFAULT_DATA_DIR) -> None:
+    """Run ingestion unless both chunk files already exist in data_dir."""
+    if all((data_dir / name).exists() for name in CHUNK_FILENAMES):
+        logger.info("Ingestion cache found in %s, skipping.", data_dir)
+        return
+    logger.info("No ingestion cache found, running ingestion...")
+    run_ingestion(data_dir=str(data_dir))
+
+
+def ensure_embeddings(data_dir: Path = DEFAULT_DATA_DIR) -> None:
+    """Generate embeddings unless every (strategy, model) .npz file already exists."""
+    expected = [
+        data_dir / f"embeddings_{strategy}_{model}.npz"
+        for strategy in STRATEGIES
+        for model in MODEL_NAMES
+    ]
+    if all(path.exists() for path in expected):
+        logger.info("Embedding cache found in %s, skipping.", data_dir)
+        return
+    logger.info("No embedding cache found, generating embeddings...")
+    embed_all_strategies(data_dir=str(data_dir))
+
+
+def ensure_vectorstore(data_dir: Path = DEFAULT_DATA_DIR) -> Path:
+    """Build the Chroma vector store unless it's already persisted on disk."""
+    persist_dir = data_dir / "chroma_db"
+    if (persist_dir / "chroma.sqlite3").exists():
+        logger.info("Vector store found at %s, skipping build.", persist_dir)
+        return persist_dir
+    logger.info("No vector store found, building...")
+    build_vectorstore(data_dir=str(data_dir), persist_dir=str(persist_dir))
+    return persist_dir
+
+
+def build_pipeline(data_dir: Path = DEFAULT_DATA_DIR, log_level: str = "INFO") -> RAGPipeline:
+    """Build any missing pipeline artifacts under data_dir, then return a ready RAGPipeline."""
+    logging.basicConfig(level=log_level, format="%(asctime)s %(levelname)s %(message)s")
+    ensure_ingestion(data_dir)
+    ensure_embeddings(data_dir)
+    ensure_vectorstore(data_dir)
+    return RAGPipeline(data_dir=str(data_dir), log_level=log_level)

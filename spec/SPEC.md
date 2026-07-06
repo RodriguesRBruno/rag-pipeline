@@ -436,7 +436,7 @@ This design allows switching vector stores without modifying retrieval or genera
 ### 5.5 LLM Configuration
 
 **Model**: Claude (Anthropic API)
-- **Authentication**: API key via environment variable `ANTHROPIC_API_KEY`
+- **Authentication**: token via environment variable `ANTHROPIC_AUTH_TOKEN`
 - **Model ID**: `claude-opus-4-1` or latest available
 - **Parameters**:
   - `temperature`: 0.3 (low creativity, focus on facts)
@@ -705,11 +705,12 @@ All dependencies are managed via **uv** and declared in `pyproject.toml`. Use `u
 
 ### 10.3 Environment Variables
 
+The app reads these directly from the process environment (no `python-dotenv`
+or in-app `.env` loading), so supply them via `uv run --env-file .env <file>`:
+
 ```bash
-ANTHROPIC_API_KEY=sk-...  # Required for LLM generation
-# Optional: 
-LOG_LEVEL=DEBUG            # Set to INFO/DEBUG for verbosity
-DATA_DIR=./data            # Path to dataset and outputs
+ANTHROPIC_AUTH_TOKEN=sk-...        # Required for LLM generation
+GENERATION_MODEL=claude-haiku-4-5  # Optional, this is the default
 ```
 
 ---

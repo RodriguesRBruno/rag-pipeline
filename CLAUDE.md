@@ -12,15 +12,18 @@ This is a **single-day RAG (Retrieval-Augmented Generation) pipeline** learning 
 
 ```
 rag-pipeline/
-├── src/                          # Core implementation modules (to be created)
+├── main.py                       # Entry point: builds cached artifacts if missing, runs Q&A loop
+├── src/                          # Core implementation modules
 │   ├── ingestion.py              # Load docs, implement two chunking strategies
 │   ├── embedding.py              # Generate embeddings with MiniLM and MPNet
 │   ├── vectorstore.py            # Abstract interface + Chroma implementation
 │   ├── retrieval.py              # Query vector store, return top-K results
 │   ├── generation.py             # Call Claude API, format responses with citations
 │   └── pipeline.py               # Orchestrate all stages
-├── data/
-│   ├── dataset/                  # CSV files: documents.csv, question sets
+├── dataset/                      # CSV files: documents.csv, question sets
+├── data/                         # Generated artifacts (gitignored, rebuilt on demand)
+│   ├── chunks_*.json             # Chunked documents per strategy
+│   ├── embeddings_*.npz          # Embeddings per strategy/model combination
 │   └── chroma_db/                # Persisted vector store (created at runtime)
 ├── eval/                         # Evaluation scripts (to be created)
 │   ├── evaluate.py               # Compute metrics (Recall, Precision, MRR, NDCG, etc.)
@@ -78,14 +81,16 @@ uv lock
 
 ### Running the Pipeline
 ```bash
-# End-to-end pipeline execution
-uv run src.pipeline
+# End-to-end: builds any missing cached artifacts under data/, then starts
+# an interactive Q&A loop. Reuses caches from prior runs instead of
+# recomputing them.
+uv run --env-file .env main.py
 
-# Run only specific stages
-uv run src.ingestion      # Chunk documents
-uv run src.embedding      # Generate embeddings
-uv run src.retrieval      # Test retrieval
-uv run src.generation     # Test LLM integration
+# Force-rebuild a single stage (module form is required: these files import
+# via `src.*` package paths, so they can't be run as bare file paths)
+uv run --env-file .env python -m src.ingestion      # Chunk documents
+uv run --env-file .env python -m src.embedding      # Generate embeddings
+uv run --env-file .env python -m src.vectorstore    # Build the vector store
 ```
 
 ### Evaluation
@@ -99,8 +104,8 @@ uv run eval.comparison_report
 
 ### Quick Testing
 ```bash
-# Test a single query with a specific strategy/model combo
-uv run python -c "from src.pipeline import RAGPipeline; p = RAGPipeline(); print(p.query('What do keybullet kin drop?', strategy='semantic', model='minilm'))"
+# Test a single query (strategy/model are constructor args, not query() args)
+uv run --env-file .env python -c "from src.pipeline import RAGPipeline; p = RAGPipeline(strategy='semantic', model='minilm'); print(p.query('What do keybullet kin drop?'))"
 ```
 
 ## Key Implementation Details
@@ -203,8 +208,15 @@ scikit-learn>=1.3.0             # Metrics (MRR, NDCG)
 ```
 
 ### Environment Variables
+No `.env` loading happens in-app (no `python-dotenv`); variables must be real
+process env vars. Put them in `.env` (gitignored, see `.env.example`) and
+supply it via `--env-file`:
 ```bash
-export ANTHROPIC_API_KEY=sk-...  # Required for LLM generation
+uv run --env-file .env main.py
+```
+```
+ANTHROPIC_AUTH_TOKEN=sk-...   # Required for LLM generation
+GENERATION_MODEL=claude-haiku-4-5  # Optional, this is the default
 ```
 
 ## Single-Day Execution Strategy
@@ -256,7 +268,7 @@ All code must be in `src/`, evaluation scripts in `eval/`, results in `RESULTS.m
 
 ### Claude API timeout
 - Set `timeout=30` on API calls
-- Check `ANTHROPIC_API_KEY` is set correctly
+- Check `ANTHROPIC_AUTH_TOKEN` is set correctly
 - Monitor rate limits (shouldn't hit with 159 questions)
 
 ### Chunking produces too many/too few chunks
