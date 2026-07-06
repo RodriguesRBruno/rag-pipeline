@@ -1,8 +1,8 @@
 """Stage 1: Document ingestion and chunking.
 
-Loads the Enter the Gungeon document corpus and splits it into chunks using
-two independent strategies (semantic and sentence-based) so that retrieval
-quality can be compared across strategies in later stages.
+Loads the document corpus (dataset/documents.csv) and splits it into chunks
+using two independent strategies (semantic and sentence-based) so that
+retrieval quality can be compared across strategies in later stages.
 """
 
 from __future__ import annotations

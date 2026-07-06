@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-This is a **single-day RAG (Retrieval-Augmented Generation) pipeline** learning project. The system ingests Enter the Gungeon video game documentation, chunks it using two strategies, embeds it with two models, stores it in a vector database, and generates grounded, cited answers to user questions.
+This is a **single-day RAG (Retrieval-Augmented Generation) pipeline** learning project. The system ingests a small, mixed-topic document corpus (nominally sourced from an Enter the Gungeon documentation dataset, but only 1 of the 20 actual documents is about Enter the Gungeon — see `spec/SPEC.md` section 2.2), chunks it using two strategies, embeds it with two models, stores it in a vector database, and generates grounded, cited answers to user questions regardless of topic.
 
 **Key Constraint**: All implementation must be completed in a single day (8-10 hours).
 
@@ -26,7 +26,7 @@ rag-pipeline/
 │   ├── embeddings_*.npz          # Embeddings per strategy/model combination
 │   └── chroma_db/                # Persisted vector store (created at runtime)
 ├── eval/                         # Evaluation scripts (to be created)
-│   ├── evaluate.py               # Compute metrics (Recall, Precision, MRR, NDCG, etc.)
+│   ├── evaluate.py               # Compute metrics (Recall, MRR, NDCG, etc.)
 │   └── comparison_report.py       # Generate comparison table across strategies
 ├── spec/
 │   └── SPEC.md                   # Full specification document
@@ -40,7 +40,7 @@ rag-pipeline/
 The RAG system flows through 4 modular stages:
 
 ### Stage 1: Ingestion & Chunking
-- Load 9,374 documents from `dataset/documents.csv`
+- Load the documents present in `dataset/documents.csv` (20 documents in this repo's actual dataset, not the 9,374-document upstream Kaggle corpus — see `spec/SPEC.md` section 2)
 - Implement two distinct chunking strategies:
   1. **Semantic Splitting**: Split by topic/section boundaries (500-800 tokens, 10% overlap)
   2. **Sentence-based**: Split on complete sentences (300-500 tokens, minimal overlap)
@@ -95,11 +95,11 @@ uv run --env-file .env python -m src.vectorstore    # Build the vector store
 
 ### Evaluation
 ```bash
-# Run all metrics on all question sets
-uv run eval.evaluate
+# Run all metrics on all question sets (writes eval/results/evaluation_results.json)
+uv run --env-file .env python -m eval.evaluate
 
-# Generate comparison table
-uv run eval.comparison_report
+# Generate comparison table (reads the JSON above, writes RESULTS.md)
+uv run --env-file .env python -m eval.comparison_report
 ```
 
 ### Quick Testing
@@ -158,36 +158,39 @@ Responses must include sources. Format:
 Validate that cited URLs are real (exist in dataset) and contain claimed information.
 
 ### Handling Unanswerable Questions
-- If retrieval returns very low similarity (< 0.5), mark as unanswerable
+- If retrieval returns very low similarity (< 0.15, calibrated for this corpus's actual embedding distribution — see `spec/SPEC.md` section 5.4), mark as unanswerable
 - If LLM explicitly states info not in corpus, respect that
 - **Never hallucinate**: don't answer from external knowledge if corpus doesn't contain answer
 
 ## Evaluation Metrics
 
-The system is evaluated on 159 questions across 3 difficulty tiers:
+The system is evaluated on 120 questions across 3 difficulty tiers (40 questions each; see `spec/SPEC.md` section 2 for why this differs from the 159-question upstream Kaggle dataset):
 
-### Single-Passage QA (62 questions)
+### Single-Passage QA (40 questions)
 - Answerable from a single document
-- Target: ≥ 80% correctness
+- Correctness tracked for comparison across combinations; no fixed target
 
-### Multi-Passage QA (58 questions)
-- Require combining info from multiple documents
-- Target: ≥ 70% correctness
+### Multi-Passage QA (40 questions)
+- Require synthesizing multiple sections/sentences of one document (see `spec/SPEC.md` section 2.3)
+- Correctness tracked for comparison across combinations; no fixed target
 
-### No-Answer QA (39 questions)
+### No-Answer QA (40 questions)
 - Cannot be answered from corpus
-- Target: ≥ 85% correct rejection (avoid hallucination)
+- **Hard requirement**: ≥ 85% correct rejection (avoid hallucination)
 
 ### Metrics to Compute
 For each (strategy × model) combination:
 - **Recall@5**: % of relevant docs in top-5 results
-- **Precision@5**: % of top-5 results that are relevant
 - **MRR**: Mean Reciprocal Rank (inverse rank of first relevant doc)
 - **NDCG@5**: Normalized Discounted Cumulative Gain
 - **Correctness**: % of answers matching ground truth
-- **Citation Accuracy**: 100% (no false citations allowed)
-- **Hallucination Rate**: % of answers with info outside retrieved context
-- **Unanswerable Detection**: % of no-answer questions correctly identified
+- **Citation Accuracy**: % of cited sources that match the ground-truth document
+- **Hallucination Rate**: % of answers with info outside retrieved context — **hard requirement: 0%**
+- **Unanswerable Detection**: % of no-answer questions correctly identified — **hard requirement: ≥ 85%**
+
+Precision@5 is intentionally not computed: with exactly one relevant document per question and K=5, it's structurally capped at 0.2 and adds no signal beyond Recall@5 on this dataset.
+
+Only Hallucination Rate and Unanswerable Detection carry a fixed pass/fail target. All other metrics are for comparing chunking strategies and embedding models against each other, not against an absolute bar.
 
 **Comparison Table**: Compare metrics across all 4 (strategy × model) combinations. Show which performs best and why.
 
@@ -249,7 +252,7 @@ By end of day, these must exist:
 
 1. **Working Pipeline**: 4 modular stages that chain together
 2. **Comparison Table**: Real metrics across all 4 (strategy × model) combinations in a markdown table
-3. **Evaluation Report**: Results on all 159 questions with analysis of successes/failures
+3. **Evaluation Report**: Results on all 120 questions with analysis of successes/failures
 4. **Larger Corpus Write-up**: One paragraph on what would change for 10x/100x larger corpus (distributed processing, better indexing, etc.)
 
 All code must be in `src/`, evaluation scripts in `eval/`, results in `RESULTS.md`.
@@ -269,7 +272,7 @@ All code must be in `src/`, evaluation scripts in `eval/`, results in `RESULTS.m
 ### Claude API timeout
 - Set `timeout=30` on API calls
 - Check `ANTHROPIC_AUTH_TOKEN` is set correctly
-- Monitor rate limits (shouldn't hit with 159 questions)
+- Monitor rate limits (shouldn't hit with 120 questions)
 
 ### Chunking produces too many/too few chunks
 - Semantic: adjust target_size (800), overlap_ratio (0.1)

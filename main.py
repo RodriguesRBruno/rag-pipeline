@@ -6,7 +6,7 @@ from src.pipeline import RAGPipeline, build_pipeline
 
 
 def qa_loop(pipeline: RAGPipeline) -> None:
-    print("\nRAG pipeline ready. Ask a question about Enter the Gungeon (or type 'quit' to exit).\n")
+    print("\nRAG pipeline ready. Ask a question about the corpus (or type 'quit' to exit).\n")
     while True:
         try:
             question = input("> ").strip()
