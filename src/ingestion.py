@@ -15,7 +15,9 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import List, Optional
 
+import nltk
 import pandas as pd
+from nltk.tokenize import sent_tokenize
 
 logger = logging.getLogger(__name__)
 
@@ -229,13 +231,10 @@ def chunk_semantic(
 def _split_sentences(text: str) -> List[str]:
     """Split text into sentences, preferring NLTK and falling back to regex."""
     try:
-        import nltk
-
         try:
             nltk.data.find("tokenizers/punkt_tab")
         except LookupError:
             nltk.download("punkt_tab", quiet=True)
-        from nltk.tokenize import sent_tokenize
 
         sentences = sent_tokenize(text)
         if sentences:

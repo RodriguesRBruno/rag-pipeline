@@ -13,6 +13,8 @@ import re
 from dataclasses import dataclass, field
 from typing import List, Optional
 
+from anthropic import Anthropic
+
 from src.vectorstore import RetrievedChunk
 
 logger = logging.getLogger(__name__)
@@ -64,11 +66,9 @@ class Generator:
     ):
         """Initialize the Claude client.
 
-        Requires the ANTHROPIC_API_KEY environment variable to be set.
+        Requires the ANTHROPIC_AUTH_TOKEN environment variable to be set.
         """
-        from anthropic import Anthropic
-
-        self.client = Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
+        self.client = Anthropic(auth_token=os.getenv("ANTHROPIC_AUTH_TOKEN"))
         self.model = model
         self.temperature = temperature
         self.max_tokens = max_tokens

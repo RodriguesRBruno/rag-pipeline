@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import Dict, List, Tuple
 
 import numpy as np
+from sentence_transformers import SentenceTransformer
 
 from src.ingestion import Chunk, load_chunks
 
@@ -30,17 +31,15 @@ CHUNK_FILES: Dict[str, str] = {
 
 DEFAULT_BATCH_SIZE = 32
 
-_model_cache: Dict[str, "SentenceTransformer"] = {}
+_model_cache: Dict[str, SentenceTransformer] = {}
 
 
-def load_embedding_model(model_key: str):
+def load_embedding_model(model_key: str) -> SentenceTransformer:
     """Load (and cache) a SentenceTransformer model by key ('minilm' or 'mpnet')."""
     if model_key not in MODEL_NAMES:
         raise ValueError(f"Unknown model key: {model_key}. Expected one of {list(MODEL_NAMES)}")
 
     if model_key not in _model_cache:
-        from sentence_transformers import SentenceTransformer
-
         logger.info("Loading embedding model %s (%s)", model_key, MODEL_NAMES[model_key])
         _model_cache[model_key] = SentenceTransformer(MODEL_NAMES[model_key])
 
@@ -49,7 +48,7 @@ def load_embedding_model(model_key: str):
 
 def embed_texts(
     texts: List[str],
-    model,
+    model: SentenceTransformer,
     batch_size: int = DEFAULT_BATCH_SIZE,
     normalize: bool = True,
 ) -> np.ndarray:

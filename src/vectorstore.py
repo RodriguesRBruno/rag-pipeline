@@ -15,7 +15,11 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, List, Optional
 
+import chromadb
 import numpy as np
+
+from src.embedding import MODEL_NAMES, load_embeddings
+from src.ingestion import load_chunks
 
 logger = logging.getLogger(__name__)
 
@@ -92,11 +96,9 @@ class ChromaVectorStore(VectorStore):
     (chunking strategy, embedding model) combination."""
 
     def __init__(self, persist_dir: str = "data/chroma_db"):
-        import chromadb
-
         self.persist_dir = persist_dir
         self.client = chromadb.PersistentClient(path=persist_dir)
-        self._collections: Dict[str, "chromadb.Collection"] = {}
+        self._collections: Dict[str, chromadb.Collection] = {}
 
     def _require_collection_name(self, collection_name: Optional[str]) -> str:
         if not collection_name:
@@ -197,8 +199,6 @@ class ChromaVectorStore(VectorStore):
         logger.info("Chroma collections persisted at %s", path or self.persist_dir)
 
     def load(self, path: Optional[str] = None) -> None:
-        import chromadb
-
         self.persist_dir = path or self.persist_dir
         self.client = chromadb.PersistentClient(path=self.persist_dir)
         self._collections = {}
@@ -210,9 +210,6 @@ def build_vectorstore(
 ) -> ChromaVectorStore:
     """Load pre-computed chunks + embeddings from data_dir and populate all
     four Chroma collections."""
-    from src.ingestion import load_chunks
-    from src.embedding import MODEL_NAMES, load_embeddings
-
     data_path = Path(data_dir)
     store = ChromaVectorStore(persist_dir=persist_dir)
 
