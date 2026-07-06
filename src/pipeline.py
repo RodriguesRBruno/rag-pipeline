@@ -38,7 +38,7 @@ class RAGPipeline:
         strategy: str = "semantic",
         model: str = "minilm",
         top_k: int = 5,
-        similarity_threshold: float = 0.5,
+        similarity_threshold: float = 0.15,
         data_dir: str = "data",
         persist_dir: Optional[str] = None,
         log_level: str = "INFO",

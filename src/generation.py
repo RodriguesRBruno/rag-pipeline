@@ -24,13 +24,16 @@ DEFAULT_MODEL = os.getenv("GENERATION_MODEL", "claude-haiku-4-5")
 UNANSWERABLE_PHRASE = "I don't have this information in my corpus."
 
 SYSTEM_PROMPT = (
-    "You are a helpful assistant answering questions about Enter the Gungeon, "
-    "a video game. Use ONLY the provided context to answer the question. "
-    "Include citations to source documents by referencing their source URL. "
-    f'If the answer is not in the context, respond exactly: "{UNANSWERABLE_PHRASE}"'
+    "You are a helpful assistant that answers questions using ONLY the provided "
+    "context below - the context may cover any topic, not just Enter the Gungeon. "
+    "Answer the question if the context contains the information, regardless of "
+    "subject matter. Include citations to source documents by referencing their "
+    "source URL. If the specific answer is not present in the context, respond "
+    f'exactly: "{UNANSWERABLE_PHRASE}"'
 )
 
 _URL_RE = re.compile(r"https?://[^\s)>\]\"']+")
+_SOURCE_LABEL_RE = re.compile(r"Source\s+(\d+)", re.IGNORECASE)
 
 
 @dataclass
@@ -62,7 +65,7 @@ class Generator:
         temperature: float = 0.3,
         max_tokens: int = 500,
         timeout: int = 30,
-        low_confidence_threshold: float = 0.5,
+        low_confidence_threshold: float = 0.15,
     ):
         """Initialize the Claude client.
 
@@ -95,15 +98,18 @@ class Generator:
         response: str,
         chunks: List[RetrievedChunk],
     ) -> List[Source]:
-        """Extract citations by matching URLs mentioned in the response
-        against retrieved chunks; falls back to citing all retrieved chunks
-        if the model didn't include explicit URLs."""
+        """Extract citations by matching URLs, or numbered "Source N" labels
+        (matching `_format_context`'s 1-indexed numbering, which is what the
+        model actually references most of the time), mentioned in the
+        response against retrieved chunks; falls back to citing all
+        retrieved chunks if the model referenced neither."""
         mentioned_urls = set(_URL_RE.findall(response))
+        mentioned_positions = {int(n) for n in _SOURCE_LABEL_RE.findall(response)}
 
         sources = [
             Source(url=c.source_url, document_index=c.document_index, chunk_id=c.chunk_id)
-            for c in chunks
-            if c.source_url in mentioned_urls
+            for i, c in enumerate(chunks, start=1)
+            if c.source_url in mentioned_urls or i in mentioned_positions
         ]
 
         if not sources:
