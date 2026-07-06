@@ -66,6 +66,42 @@ The three question sets provide tiered evaluation:
 - **No-answer**: Tests hallucination prevention (39 questions)
 - **Total**: 159 evaluation questions
 
+### 2.5 Actual Dataset Present in This Repository
+
+**Note**: Sections 2.1–2.4 describe the full Kaggle "Single Topic RAG Evaluation
+Dataset" as documented upstream. The CSV files actually checked into
+`dataset/` in this repository are a much smaller sample, confirmed by
+inspection during implementation (`src/ingestion.py`):
+
+| File | Documented Records | Actual Records | Actual Columns |
+|------|--------------------:|----------------:|-----------------|
+| `documents.csv` | 9,374 | **20** | `index`, `source_url`, `text` (unchanged) |
+| `single_passage_answer_questions.csv` | 62 | **40** | `document_index`, `question`, `answer` (unchanged) |
+| `multi_passage_answer_questions.csv` | 58 | **40** | `document_index`, `question`, `answer` (unchanged) |
+| `no_answer_questions.csv` | 39 | **40** | `document_index`, `question` (unchanged) |
+
+Additional observations:
+- `documents.csv` is ~722 KB on disk (matching the documented size), but that
+  size comes from 20 long, multi-paragraph documents rather than 9,374 short
+  ones — line-count-based tools (e.g. `wc -l`) undercount/overcount here
+  because `text` fields contain embedded newlines inside quoted CSV cells.
+- Only document `index=0` (Bullet Kin) is actually about Enter the Gungeon;
+  the other 19 documents cover unrelated topics (D&D campaign notes, RAG/LLM
+  tooling, cooking, films, GPUs, other video game wikis, etc.). This makes
+  the corpus more of a generic multi-topic retrieval sample than a
+  single-topic Gungeon corpus.
+- Expected chunk counts in Section 5.2 (~9,500–10,000 semantic chunks,
+  ~40,000–50,000 sentence chunks) do not apply to this smaller corpus. On the
+  actual 20-document corpus, semantic chunking produces ~144 chunks and
+  sentence chunking produces ~307 chunks.
+- Target correctness/recall thresholds in Sections 6–9 were written against
+  the full 159-question evaluation set and should be re-validated against the
+  actual 120-question (40+40+40) set before being treated as pass/fail gates.
+
+None of the implementation in `src/` hard-codes the documented counts (9,374
+documents, 62/58/39 questions, etc.); ingestion, chunking, embedding, and
+retrieval all operate on whatever is actually present in `dataset/`.
+
 ---
 
 ## 3. Functional Requirements
