@@ -17,18 +17,11 @@ logger = logging.getLogger(__name__)
 STRATEGY_LABELS = {"semantic": "Semantic", "sentence": "Sentence"}
 MODEL_LABELS = {"minilm": "MiniLM", "mpnet": "MPNet"}
 
-# SPEC.md section 9.2 quality gates.
+# SPEC.md section 6.4 hard requirements. Every other metric (correctness,
+# citation accuracy, recall, MRR, NDCG) is comparison-only, with no fixed target.
 TARGETS = {
-    "single_correctness": 0.80,
-    "multi_correctness": 0.70,
     "no_answer_detection": 0.85,
-    "citation_accuracy": 1.00,
-    "hallucination_rate_max": 0.05,
-    "recall_single": 0.80,
-    "recall_multi": 0.70,
-    "precision": 0.60,
-    "mrr": 0.75,
-    "ndcg": 0.70,
+    "hallucination_rate_max": 0.0,
 }
 
 
@@ -67,7 +60,6 @@ def _combo_row_metrics(combo_result: Dict) -> Dict:
 
     return {
         "recall_at_5": weighted("recall_at_k"),
-        "precision_at_5": weighted("precision_at_k"),
         "mrr": weighted("mrr"),
         "ndcg_at_5": weighted("ndcg_at_k"),
         "single_correctness": single["generation"]["correctness"],
@@ -89,10 +81,10 @@ class ComparisonReporter:
 
     def generate_comparison_table(self) -> str:
         header = (
-            "| Strategy | Model | Recall@5 | Precision@5 | MRR | NDCG@5 | "
+            "| Strategy | Model | Recall@5 | MRR | NDCG@5 | "
             "Single Correctness | Multi Correctness | Citation Accuracy | "
             "Hallucination Rate | No-Answer Detection |\n"
-            "|----------|-------|----------|-------------|-----|--------|"
+            "|----------|-------|----------|-----|--------|"
             "--------------------|--------------------|--------------------|"
             "---------------------|----------------------|\n"
         )
@@ -101,7 +93,7 @@ class ComparisonReporter:
             m = self.combo_metrics[combo]
             rows.append(
                 f"| {STRATEGY_LABELS[r['strategy']]} | {MODEL_LABELS[r['model']]} | "
-                f"{_fmt(m['recall_at_5'])} | {_fmt(m['precision_at_5'])} | "
+                f"{_fmt(m['recall_at_5'])} | "
                 f"{_fmt(m['mrr'])} | {_fmt(m['ndcg_at_5'])} | "
                 f"{_fmt(m['single_correctness'])} | {_fmt(m['multi_correctness'])} | "
                 f"{_fmt(m['citation_accuracy'])} | {_fmt(m['hallucination_rate'])} | "
@@ -233,10 +225,7 @@ class ComparisonReporter:
             "topics (D&D notes, RAG tooling, cooking, films) alongside a single real Gungeon document makes "
             "this a generic small-corpus retrieval benchmark rather than a domain-specific Gungeon QA system; "
             "sourcing more Gungeon-specific documents would make the single/multi-passage results more "
-            "representative of the original spec's intent.\n"
-            "4. **Precision@5 is structurally capped** at 0.2 in this corpus (only one relevant document per "
-            "query, k=5) - it should not be used as a pass/fail gate here; Recall@5, MRR, and NDCG@5 are the "
-            "meaningful retrieval signals for this dataset size."
+            "representative of the original spec's intent."
         )
 
 
@@ -260,10 +249,7 @@ def generate_full_report(results: Dict, output_path: str = "RESULTS.md") -> None
     for combo, m in reporter.combo_metrics.items():
         checklist_rows.append(
             f"| {combo} | "
-            f"{'✅' if (m['single_correctness'] or 0) >= TARGETS['single_correctness'] else '❌'} | "
-            f"{'✅' if (m['multi_correctness'] or 0) >= TARGETS['multi_correctness'] else '❌'} | "
             f"{'✅' if (m['no_answer_detection'] or 0) >= TARGETS['no_answer_detection'] else '❌'} | "
-            f"{'✅' if (m['citation_accuracy'] or 0) >= TARGETS['citation_accuracy'] else '❌'} | "
             f"{'✅' if (m['hallucination_rate'] if m['hallucination_rate'] is not None else 1) <= TARGETS['hallucination_rate_max'] else '❌'} |"
         )
 
@@ -273,17 +259,20 @@ def generate_full_report(results: Dict, output_path: str = "RESULTS.md") -> None
 
 This evaluation runs against the dataset actually present in `dataset/`: **20 documents**
 and **40 questions per question set** (single/multi/no-answer), not the 9,374-document /
-159-question corpus described in the original Kaggle dataset. See `spec/SPEC.md` section 2.5
-for details. Two consequences worth keeping in mind when reading the numbers below:
+159-question corpus described in the original Kaggle dataset. See `spec/SPEC.md` section 2
+for details. One consequence worth keeping in mind when reading the numbers below:
 
-- **Precision@5 is structurally capped at 0.2** for single/multi-passage questions: each
-  question has exactly one relevant document, so at most 1 of the 5 retrieved results can be
-  a hit. The SPEC.md target of Precision@5 > 0.6 is not achievable on this corpus and is
-  reported for completeness rather than treated as a pass/fail gate.
 - Only document index 0 is genuinely about Enter the Gungeon; the other 19 documents cover
   unrelated topics (D&D campaign notes, RAG/LLM tooling, cooking, films, a game changelog,
   etc). This makes the corpus a generic small-corpus retrieval benchmark more than a
   domain-specific Gungeon QA system.
+
+Per `spec/SPEC.md` section 6.4, only Hallucination Rate and No-Answer Detection carry a
+fixed pass/fail target here. Recall@5, MRR, NDCG@5, Correctness, and Citation Accuracy are
+reported for comparison across strategy/model combinations without a fixed target — the
+small, mixed-topic corpus has no external ground truth for what a "good enough" score looks
+like on those axes. Precision@5 is not computed at all: with exactly one relevant document
+per question and K=5, it is structurally capped at 0.2 and adds no signal beyond Recall@5.
 
 ## Design Changes Made During Evaluation
 
@@ -325,10 +314,10 @@ Four issues surfaced while building this evaluation and were fixed in `src/`:
 
 {reporter.identify_winner()}
 
-## SPEC.md Success Criteria Checklist
+## SPEC.md Hard Requirements Checklist
 
-| Combo | Single ≥80% | Multi ≥70% | No-Answer ≥85% | Citation 100% | Hallucination <5% |
-|-------|-------------|------------|-----------------|----------------|---------------------|
+| Combo | No-Answer ≥85% | Hallucination 0% |
+|-------|-----------------|-------------------|
 {chr(10).join(checklist_rows)}
 
 ## Per-Question-Type Analysis

@@ -1,14 +1,19 @@
 """Evaluation metrics for the RAG pipeline.
 
-Computes retrieval quality (Recall@K, Precision@K, MRR, NDCG@K) and answer
-quality (Correctness, Citation Accuracy, Hallucination Rate, Unanswerable
-Detection) across all 4 (chunking strategy x embedding model) combinations,
-using the ground truth in dataset/single_passage_answer_questions.csv,
+Computes retrieval quality (Recall@K, MRR, NDCG@K) and answer quality
+(Correctness, Citation Accuracy, Hallucination Rate, Unanswerable Detection)
+across all 4 (chunking strategy x embedding model) combinations, using the
+ground truth in dataset/single_passage_answer_questions.csv,
 dataset/multi_passage_answer_questions.csv, and dataset/no_answer_questions.csv.
 
 Ground truth in this corpus is a single `document_index` per question (even
-for the "multi-passage" set - see spec/SPEC.md section 2.5), so retrieval
+for the "multi-passage" set - see spec/SPEC.md section 2.3), so retrieval
 relevance is evaluated against that one document.
+
+Precision@K is intentionally not computed: with exactly one relevant document
+per question and K=5, it's structurally capped at 0.2 for any system that
+retrieves the correct document at all, so it adds no signal beyond Recall@K
+on this dataset (see spec/SPEC.md section 6.1).
 """
 
 from __future__ import annotations
@@ -85,7 +90,6 @@ class RetrievalMetrics:
     """Retrieval-quality metrics for a single question."""
 
     recall_at_k: float
-    precision_at_k: float
     reciprocal_rank: float
     ndcg_at_k: float
 
@@ -133,14 +137,14 @@ def compute_retrieval_metrics(
     ground_truth_index: int,
     k: int = 5,
 ) -> RetrievalMetrics:
-    """Compute Recall@K, Precision@K, MRR, and NDCG@K for a single question.
+    """Compute Recall@K, MRR, and NDCG@K for a single question.
 
-    This corpus has exactly one relevant document per question. Recall@K and
-    Precision@K are plain set/count arithmetic over the top-K - there's no
-    scikit-learn helper for truncated-K retrieval recall/precision over an
-    arbitrary candidate list (`top_k_accuracy_score` assumes scores over the
-    full label space, which doesn't fit a variable-length candidate list), so
-    those two stay direct computations.
+    This corpus has exactly one relevant document per question. Recall@K is
+    plain set/count arithmetic over the top-K - there's no scikit-learn
+    helper for truncated-K retrieval recall over an arbitrary candidate list
+    (`top_k_accuracy_score` assumes scores over the full label space, which
+    doesn't fit a variable-length candidate list), so it stays a direct
+    computation.
 
     MRR and NDCG@K are delegated to scikit-learn's ranking metrics
     (`label_ranking_average_precision_score`, `ndcg_score`), which is exactly
@@ -164,7 +168,6 @@ def compute_retrieval_metrics(
     hits = [1 if doc == ground_truth_index else 0 for doc in top_k]
 
     recall = 1.0 if any(hits) else 0.0
-    precision = (sum(hits) / len(top_k)) if top_k else 0.0
 
     if not any(hits) or len(top_k) < 2:
         # Miss, or too few candidates for sklearn's ndcg_score (requires >1);
@@ -179,7 +182,6 @@ def compute_retrieval_metrics(
 
     return RetrievalMetrics(
         recall_at_k=recall,
-        precision_at_k=precision,
         reciprocal_rank=reciprocal_rank,
         ndcg_at_k=ndcg,
     )
@@ -287,7 +289,7 @@ class Evaluator:
         retrieval = (
             compute_retrieval_metrics(retrieved_document_indices, ground_truth_index, k=self.top_k)
             if ground_truth_index is not None
-            else RetrievalMetrics(0.0, 0.0, 0.0, 0.0)
+            else RetrievalMetrics(0.0, 0.0, 0.0)
         )
 
         context_text = "\n".join(c.text for c in chunks)
@@ -331,7 +333,6 @@ class Evaluator:
         """Aggregate per-question metrics into mean summary statistics."""
         retrieval_summary = {
             "recall_at_k": _mean([r.retrieval.recall_at_k for r in results]),
-            "precision_at_k": _mean([r.retrieval.precision_at_k for r in results]),
             "mrr": _mean([r.retrieval.reciprocal_rank for r in results]),
             "ndcg_at_k": _mean([r.retrieval.ndcg_at_k for r in results]),
         }

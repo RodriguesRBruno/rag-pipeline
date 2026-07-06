@@ -4,17 +4,20 @@
 
 This evaluation runs against the dataset actually present in `dataset/`: **20 documents**
 and **40 questions per question set** (single/multi/no-answer), not the 9,374-document /
-159-question corpus described in the original Kaggle dataset. See `spec/SPEC.md` section 2.5
-for details. Two consequences worth keeping in mind when reading the numbers below:
+159-question corpus described in the original Kaggle dataset. See `spec/SPEC.md` section 2
+for details. One consequence worth keeping in mind when reading the numbers below:
 
-- **Precision@5 is structurally capped at 0.2** for single/multi-passage questions: each
-  question has exactly one relevant document, so at most 1 of the 5 retrieved results can be
-  a hit. The SPEC.md target of Precision@5 > 0.6 is not achievable on this corpus and is
-  reported for completeness rather than treated as a pass/fail gate.
 - Only document index 0 is genuinely about Enter the Gungeon; the other 19 documents cover
   unrelated topics (D&D campaign notes, RAG/LLM tooling, cooking, films, a game changelog,
   etc). This makes the corpus a generic small-corpus retrieval benchmark more than a
   domain-specific Gungeon QA system.
+
+Per `spec/SPEC.md` section 6.4, only Hallucination Rate and No-Answer Detection carry a
+fixed pass/fail target here. Recall@5, MRR, NDCG@5, Correctness, and Citation Accuracy are
+reported for comparison across strategy/model combinations without a fixed target — the
+small, mixed-topic corpus has no external ground truth for what a "good enough" score looks
+like on those axes. Precision@5 is not computed at all: with exactly one relevant document
+per question and K=5, it is structurally capped at 0.2 and adds no signal beyond Recall@5.
 
 ## Design Changes Made During Evaluation
 
@@ -50,60 +53,62 @@ Four issues surfaced while building this evaluation and were fixed in `src/`:
 
 ## Comparison Table
 
-| Strategy | Model | Recall@5 | Precision@5 | MRR | NDCG@5 | Single Correctness | Multi Correctness | Citation Accuracy | Hallucination Rate | No-Answer Detection |
-|----------|-------|----------|-------------|-----|--------|--------------------|--------------------|--------------------|---------------------|----------------------|
-| Semantic | MiniLM | 83.8% | 28.6% | 70.8% | 74.2% | 55.0% | 47.5% | 86.4% | 0.0% | 95.0% |
-| Semantic | MPNet | 77.5% | 32.1% | 70.8% | 72.6% | 52.5% | 55.0% | 88.5% | 0.0% | 92.5% |
-| Sentence | MiniLM | 85.0% | 27.7% | 75.4% | 77.8% | 55.0% | 42.5% | 86.2% | 0.0% | 92.5% |
-| Sentence | MPNet | 80.0% | 29.6% | 71.6% | 73.7% | 52.5% | 42.5% | 92.3% | 0.0% | 92.5% |
+| Strategy | Model | Recall@5 | MRR | NDCG@5 | Single Correctness | Multi Correctness | Citation Accuracy | Hallucination Rate | No-Answer Detection |
+|----------|-------|----------|-----|--------|--------------------|--------------------|--------------------|---------------------|----------------------|
+| Semantic | MiniLM | 83.8% | 70.8% | 74.2% | 57.5% | 47.5% | 84.9% | 0.0% | 95.0% |
+| Semantic | MPNet | 77.5% | 70.8% | 72.6% | 52.5% | 55.0% | 94.2% | 0.0% | 92.5% |
+| Sentence | MiniLM | 85.0% | 75.4% | 77.8% | 57.5% | 47.5% | 86.7% | 2.0% | 92.5% |
+| Sentence | MPNet | 80.0% | 71.6% | 73.7% | 52.5% | 42.5% | 92.0% | 0.0% | 92.5% |
 
 ## Winner
 
-**Sentence + MiniLM** scores highest overall (composite score 0.768), with Recall@5=85.0%, MRR=75.4%, single-passage correctness=55.0%, and no-answer detection=92.5%.
+**Sentence + MiniLM** scores highest overall (composite score 0.776), with Recall@5=85.0%, MRR=75.4%, single-passage correctness=57.5%, and no-answer detection=92.5%.
 
-## SPEC.md Success Criteria Checklist
+## SPEC.md Hard Requirements Checklist
 
-| Combo | Single ≥80% | Multi ≥70% | No-Answer ≥85% | Citation 100% | Hallucination <5% |
-|-------|-------------|------------|-----------------|----------------|---------------------|
-| semantic_minilm | ❌ | ❌ | ✅ | ❌ | ✅ |
-| semantic_mpnet | ❌ | ❌ | ✅ | ❌ | ✅ |
-| sentence_minilm | ❌ | ❌ | ✅ | ❌ | ✅ |
-| sentence_mpnet | ❌ | ❌ | ✅ | ❌ | ✅ |
+| Combo | No-Answer ≥85% | Hallucination 0% |
+|-------|-----------------|-------------------|
+| semantic_minilm | ✅ | ✅ |
+| semantic_mpnet | ✅ | ✅ |
+| sentence_minilm | ✅ | ❌ |
+| sentence_mpnet | ✅ | ✅ |
 
 ## Per-Question-Type Analysis
 
 (Examples below are from the best-performing combo, **sentence_minilm**.)
 
 **Single-Passage Questions (40 total, Sentence + MiniLM)**
-- Rate: 55.0%
-- Example correct: "What do keybullet kin drop?" -> According to the provided context, Keybullet Kin drop **keys** upon death. However, there is one important exception: if a Keybullet Kin is knocked into a pit, it will not drop a k
+- Rate: 57.5%
+- Example correct: "What do keybullet kin drop?" -> According to the provided context, Keybullet Kin drop **keys** upon death. However, if a Keybullet Kin is knocked into a pit, it will not drop a key.
+
+[Source: https://enterthegung
 - Example failure: "What do the giants look like?" -> I don't have this information in my corpus.
 
 The provided context contains information about Stardew Valley, Enter the Gungeon, fantasy books, and Alan Wake 2, but does not include
 
 **Multi-Passage Questions (40 total, Sentence + MiniLM)**
-- Rate: 42.5%
+- Rate: 47.5%
 - Example correct: "Which enemy types wield an AK-47?" -> Based on the provided context, the following enemy types in Enter the Gungeon wield AK-47s:
 
 1. **Tankers** - According to the source, "Tankers wield AK-47s." [https://enterthegung
 - Example failure: "What makes jammed enemies different?" -> I don't have this information in my corpus.
 
-While the provided context from Enter the Gungeon mentions "Jammed Chance Kins" having a chance to drop twice the loot (Source 2), it d
+While the provided context from Enter the Gungeon mentions "Jammed Chance Kins" having a chance to drop twice the loot, it does not con
 
 **No-Answer Questions (40 total, Sentence + MiniLM)**
 - Rate: 92.5%
 - Example correct: "How much health does the Mutant Bullet Kin have?" -> I don't have this information in my corpus.
 
 The context states that Mutant Bullet Kin "have higher health" compared to regular Bullet Kin, but it does not provide a specific healt
-- Example failure: "What needs to be done to kiss the Emperor?" -> Based on the provided context, to engage in intimate activities with the Emperor in Baldur's Gate 3, you need to:
+- Example failure: "What needs to be done to kiss the Emperor?" -> Based on the provided context, to have a romantic/intimate scene with the Emperor in Baldur's Gate 3, you need to:
 
-1. **Be receptive to the Emperor's advances** - Treat the Emperor
+1. **Be receptive to the Emperor's advances** - Treat the Empero
 
 ## Failure Mode Analysis
 
 - **Retrieval failures** (wrong document retrieved): 12
-- **Generation failures** (correct doc retrieved, answer still didn't match ground truth): 29
-- **Hallucination failures** (answer introduced ungrounded content): 0
+- **Generation failures** (correct doc retrieved, answer still didn't match ground truth): 26
+- **Hallucination failures** (answer introduced ungrounded content): 1
 - **No-answer failures** (should have rejected, didn't): 3
   - Retrieval failure example: "What do the giants look like?" -> I don't have this information in my corpus.
 
@@ -111,9 +116,9 @@ The provided context contains information about Stardew Valley, Enter the Gungeo
   - Generation failure example: "What were the requirements for the project?" -> I don't have this information in my corpus.
 
 The context provided discusses various topics including STICI-note prototype development, data science project impa
-  - No-answer failure example: "What needs to be done to kiss the Emperor?" -> Based on the provided context, to engage in intimate activities with the Emperor in Baldur's Gate 3, you need to:
+  - No-answer failure example: "What needs to be done to kiss the Emperor?" -> Based on the provided context, to have a romantic/intimate scene with the Emperor in Baldur's Gate 3, you need to:
 
-1. **Be receptive to the Emperor's advances**
+1. **Be receptive to the Emperor's advances*
 
 ## Larger Corpus Write-Up
 
@@ -124,4 +129,3 @@ For a 10x larger corpus (~200 documents), the current approach would mostly hold
 1. **Increase candidate diversity further for multi-passage synthesis**: several multi-passage questions need 2-3 sections from the *same* document (e.g. multiple enemy sub-sections); raising `max_chunks_per_document` from 2 to 3 for the `sentence` strategy specifically would likely help without reintroducing the single-document-crowding problem, since that mainly affects cross-document diversity.
 2. **Replace the pure token-overlap correctness heuristic with an LLM-as-judge pass** once outside the single-day budget - it would catch cases like paraphrased-but-correct answers that score low on raw overlap.
 3. **Re-balance the corpus** if extending this project: the actual dataset's mix of unrelated topics (D&D notes, RAG tooling, cooking, films) alongside a single real Gungeon document makes this a generic small-corpus retrieval benchmark rather than a domain-specific Gungeon QA system; sourcing more Gungeon-specific documents would make the single/multi-passage results more representative of the original spec's intent.
-4. **Precision@5 is structurally capped** at 0.2 in this corpus (only one relevant document per query, k=5) - it should not be used as a pass/fail gate here; Recall@5, MRR, and NDCG@5 are the meaningful retrieval signals for this dataset size.
