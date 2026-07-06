@@ -1,0 +1,7 @@
+.venv/
+__pycache__/
+*.pyc
+.env
+
+# Generated pipeline artifacts (reproducible via src.ingestion / src.embedding / src.vectorstore)
+data/
