@@ -1,0 +1,1 @@
+RAG project for learning using the Kaggle dataset available at https://www.kaggle.com/datasets/samuelmatsuoharris/single-topic-rag-evaluation-dataset
