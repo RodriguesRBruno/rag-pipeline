@@ -22,7 +22,10 @@ class RetrieverConfig:
     """Configuration for retrieval."""
 
     top_k: int = 5
-    similarity_threshold: float = 0.5
+    similarity_threshold: float = 0.15
+    dedupe_by_document: bool = True
+    candidate_pool_size: int = 20
+    max_chunks_per_document: int = 2
 
 
 class Retriever:
@@ -68,6 +71,31 @@ class Retriever:
         if not np.all(np.isfinite(embedding)):
             raise ValueError("Query embedding contains non-finite values")
 
+    @staticmethod
+    def _cap_chunks_per_document(
+        results: List[RetrievedChunk], max_per_document: int
+    ) -> List[RetrievedChunk]:
+        """Keep at most `max_per_document` best-scoring chunks per source document.
+
+        Corpora with a wide spread of document lengths can have one document
+        contribute disproportionately many chunks (e.g. a huge changelog),
+        which crowds out the correct document across unrelated queries purely
+        because it has more shots at the top-K. Capping chunks per document
+        (still ranked by similarity, no separate reranking model) restores
+        document-level diversity while still allowing a couple of chunks from
+        the same document through for queries that need multiple sections of
+        one document to answer (e.g. multi-passage synthesis questions).
+        """
+        counts: Dict[int, int] = {}
+        capped: List[RetrievedChunk] = []
+        for chunk in sorted(results, key=lambda r: r.similarity_score, reverse=True):
+            count = counts.get(chunk.document_index, 0)
+            if count >= max_per_document:
+                continue
+            counts[chunk.document_index] = count + 1
+            capped.append(chunk)
+        return capped
+
     def retrieve(
         self,
         query: str,
@@ -95,16 +123,21 @@ class Retriever:
         query_embedding = self._embed_query(query, model_key)
         self._validate_query_embedding(query_embedding)
 
+        target_k = k if k is not None else self.config.top_k
+        threshold = (
+            similarity_threshold if similarity_threshold is not None else self.config.similarity_threshold
+        )
+        pool_k = max(target_k, self.config.candidate_pool_size) if self.config.dedupe_by_document else target_k
+
         results = self.vectorstore.search(
             query_embedding=query_embedding,
-            k=k if k is not None else self.config.top_k,
-            similarity_threshold=(
-                similarity_threshold
-                if similarity_threshold is not None
-                else self.config.similarity_threshold
-            ),
+            k=pool_k,
+            similarity_threshold=threshold,
             collection_name=collection_name,
         )
 
+        if self.config.dedupe_by_document:
+            results = self._cap_chunks_per_document(results, self.config.max_chunks_per_document)
+
         results.sort(key=lambda r: r.similarity_score, reverse=True)
-        return results
+        return results[:target_k]
