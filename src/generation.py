@@ -19,7 +19,7 @@ from src.vectorstore import RetrievedChunk
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_MODEL = os.getenv("GENERATION_MODEL", "claude-sonnet-5")
+DEFAULT_MODEL = os.getenv("GENERATION_MODEL", "claude-haiku-4-5")
 
 UNANSWERABLE_PHRASE = "I don't have this information in my corpus."
 
