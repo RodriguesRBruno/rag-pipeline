@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Dict, Optional
 
 from eval.evaluate import load_results
 
@@ -16,6 +16,7 @@ logger = logging.getLogger(__name__)
 
 STRATEGY_LABELS = {"semantic": "Semantic", "sentence": "Sentence"}
 MODEL_LABELS = {"minilm": "MiniLM", "mpnet": "MPNet"}
+EXAMPLE_CHARACTER_CAP = 200
 
 # SPEC.md section 6.4 hard requirements. Every other metric (correctness,
 # citation accuracy, recall, MRR, NDCG) is comparison-only, with no fixed target.
@@ -178,51 +179,51 @@ class ComparisonReporter:
             if not q["generation"]["correctly_rejected"]:
                 no_answer_failures.append(q)
 
-        lines = [
-            f"- **Retrieval failures** (wrong document retrieved): {len(retrieval_failures)}",
-            f"- **Generation failures** (correct doc retrieved, answer still didn't match ground truth): {len(generation_failures)}",
-            f"- **Hallucination failures** (answer introduced ungrounded content): {len(hallucination_failures)}",
-            f"- **No-answer failures** (should have rejected, didn't): {len(no_answer_failures)}",
-        ]
-        for label, bucket in [
-            ("Retrieval failure example", retrieval_failures),
-            ("Generation failure example", generation_failures),
-            ("No-answer failure example", no_answer_failures),
+        lines = []
+        for label, description, bucket in [
+            ("Retrieval failure", "wrong document retrieved", retrieval_failures),
+            ("Generation failure", "correct doc retrieved but answer didn't match ground_truth", generation_failures),
+            ("Hallucination failure", "answer introduced ungrounded content", hallucination_failures),
+            ("No-answer failure", "should have rejected but didn't", no_answer_failures),
         ]:
-            if bucket:
+            num_failures = len(bucket)
+            main_label = label if num_failures == 1 else f'{label}s'
+            this_line = f'- **{main_label}** ({description}): {num_failures}'
+            if num_failures > 0:
                 q = bucket[0]
-                lines.append(f'  - {label}: "{q["question"]}" -> {q["generated_answer"][:160].strip()}')
+                example_answer = q['generated_answer']
+                if len(example_answer) > EXAMPLE_CHARACTER_CAP:
+                    example_answer = f'{q["generated_answer"][:EXAMPLE_CHARACTER_CAP].strip()}...'
+                example_label_line = f'  - {label} example:'
+                example_question_line = f'      - **Question**: `{q["question"]}`'
+                example_answer_line =   f'      - **Answer**:\n```markdown\n{example_answer}\n```'
+                this_line = f'{this_line}\n{example_label_line}\n{example_question_line}\n{example_answer_line}'
+            lines.append(this_line)
+
         return "\n".join(lines)
 
     @staticmethod
     def write_larger_corpus_section() -> str:
-        return (
-            "For a 10x larger corpus (~200 documents), the current approach would mostly hold, but "
-            "the document-length skew we hit here (one 211KB changelog producing 30% of all chunks and "
-            "crowding out unrelated queries) would recur more often and at greater cost - the per-document "
-            "chunk cap added during evaluation (see below) would need to become a proper per-document "
-            "sampling/weighting scheme rather than a fixed cap of 2. Embedding generation would still run "
-            "on a single machine but would benefit from GPU batching. For 100x scale (~2,000+ documents and "
-            "tens of thousands of chunks), Chroma's exact search would start to show latency; we'd move to a "
-            "production vector database (Qdrant/Pinecone/pgvector) with approximate nearest-neighbor search "
-            "(HNSW) and shard embedding generation across workers. Retrieval would likely move to a two-stage "
-            "pipeline: fast approximate top-50 candidate search followed by a lightweight reranker, since "
-            "cosine similarity alone (as seen in this evaluation) doesn't cleanly separate relevant from "
-            "irrelevant documents once the corpus covers many topics."
-        )
+        return ("""For larger corpora, two immediate areas of improvement are the most apparent. 
+The first is migrating the in-memory Vector Database (Chroma) to a persistent, more resilient Vector Dabase, 
+such as Qdrant, Pincecone or PGVector. Secondly, retrieval could be improved by implementing a two-stage pipeline, 
+employing a fast approximate top-k candidate search follower by a reranker, as cosine similarity alone doesn't 
+clearly separate relevant from irrelevant documents, as seen in this evaluation. 
 
-    def recommendations(self, primary_combo: str) -> str:
-        return (
-            "1. **Increase candidate diversity further for multi-passage synthesis**: several multi-passage "
-            "questions need 2-3 sections from the *same* document (e.g. multiple enemy sub-sections); "
-            "raising `max_chunks_per_document` from 2 to 3 for the `sentence` strategy specifically would "
-            "likely help without reintroducing the single-document-crowding problem, since that mainly "
-            "affects cross-document diversity.\n"
-            "2. **Replace the pure token-overlap correctness heuristic with an LLM-as-judge pass** once "
-            "outside the single-day budget - it would catch cases like paraphrased-but-correct answers that "
-            "score low on raw overlap."
+Other areas of improvement that are apparent, but not as immediate as the previous two are:
+-  Separating this single RAG system into multiple RAG subsystems if the larger dataset remains 
+unbalanced as this sample test one (where one 211KB changelog produced 30% of all the chunks). 
+A first LLM could simply detect the topic of the question and then referring it to the relevant RAG 
+system, or stating it doesn't know the answer if no subsystem is adequate.
+-  Use a LLM-as-a-judge correctness heurestic rather than token overlap. Token overlap was chosen 
+simply due to the single-day scope of this project, but is not an industry best practice.
+- Increase candidate diversity further for multi-passage synthesis. Several multi-passage 
+questions need 2-3 sections from the *same* document (e.g. multiple enemy sub-sections); 
+raising `max_chunks_per_document` from 2 to 3 for the `sentence` strategy specifically would 
+likely help without reintroducing the single-document-crowding problem, 
+since that mainly affects cross-document diversity.
+                """
         )
-
 
 def generate_full_report(results: Dict, output_path: str = "RESULTS.md") -> None:
     """Generate the complete markdown report and write it to output_path."""
@@ -322,10 +323,6 @@ Several corpus-specific properties shape `src/`'s retrieval and generation behav
 ## Larger Corpus Write-Up
 
 {reporter.write_larger_corpus_section()}
-
-## Recommendations
-
-{reporter.recommendations(primary_combo)}
 """
 
     Path(output_path).write_text(report, encoding="utf-8")

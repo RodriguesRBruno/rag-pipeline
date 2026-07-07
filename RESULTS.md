@@ -101,24 +101,58 @@ The context states that Mutant Bullet Kin "have higher health" compared to regul
 ## Failure Mode Analysis
 
 - **Retrieval failures** (wrong document retrieved): 12
-- **Generation failures** (correct doc retrieved, answer still didn't match ground truth): 26
-- **Hallucination failures** (answer introduced ungrounded content): 1
-- **No-answer failures** (should have rejected, didn't): 3
-  - Retrieval failure example: "What do the giants look like?" -> I don't have this information in my corpus.
+  - Retrieval failure example:
+      - **Question**: `What do the giants look like?`
+      - **Answer**:
+```markdown
+I don't have this information in my corpus.
 
-The provided context contains information about Stardew Valley, Enter the Gungeon, fantasy books, and Alan Wake 2,
-  - Generation failure example: "What were the requirements for the project?" -> I don't have this information in my corpus.
+The provided context contains information about Stardew Valley, Enter the Gungeon, fantasy books, and Alan Wake 2, but does not include any description of...
+```
+- **Generation failures** (correct doc retrieved but answer didn't match ground_truth): 26
+  - Generation failure example:
+      - **Question**: `What were the requirements for the project?`
+      - **Answer**:
+```markdown
+I don't have this information in my corpus.
 
-The context provided discusses various topics including STICI-note prototype development, data science project impa
-  - No-answer failure example: "What needs to be done to kiss the Emperor?" -> Based on the provided context, to have a romantic/intimate scene with the Emperor in Baldur's Gate 3, you need to:
+The context provided discusses various topics including STICI-note prototype development, data science project impact, EU AI regulations, and LLMWare platf...
+```
+- **Hallucination failure** (answer introduced ungrounded content): 1
+  - Hallucination failure example:
+      - **Question**: `When did mushroom trees stop dropping wood?`
+      - **Answer**:
+```markdown
+Based on the context provided, I can see that mushroom trees no longer drop wood according to Source 1 (https://stardewvalleywiki.com/Version_History), but the specific version or date when this chang...
+```
+- **No-answer failures** (should have rejected but didn't): 3
+  - No-answer failure example:
+      - **Question**: `What needs to be done to kiss the Emperor?`
+      - **Answer**:
+```markdown
+Based on the provided context, to have a romantic/intimate scene with the Emperor in Baldur's Gate 3, you need to:
 
-1. **Be receptive to the Emperor's advances*
+1. **Be receptive to the Emperor's advances** - Treat the Emperor respectfully in di...
+```
 
 ## Larger Corpus Write-Up
 
-For a 10x larger corpus (~200 documents), the current approach would mostly hold, but the document-length skew we hit here (one 211KB changelog producing 30% of all chunks and crowding out unrelated queries) would recur more often and at greater cost - the per-document chunk cap added during evaluation (see below) would need to become a proper per-document sampling/weighting scheme rather than a fixed cap of 2. Embedding generation would still run on a single machine but would benefit from GPU batching. For 100x scale (~2,000+ documents and tens of thousands of chunks), Chroma's exact search would start to show latency; we'd move to a production vector database (Qdrant/Pinecone/pgvector) with approximate nearest-neighbor search (HNSW) and shard embedding generation across workers. Retrieval would likely move to a two-stage pipeline: fast approximate top-50 candidate search followed by a lightweight reranker, since cosine similarity alone (as seen in this evaluation) doesn't cleanly separate relevant from irrelevant documents once the corpus covers many topics.
+For larger corpora, two immediate areas of improvement are the most apparent. 
+The first is migrating the in-memory Vector Database (Chroma) to a persistent, more resilient Vector Dabase, 
+such as Qdrant, Pincecone or PGVector. Secondly, retrieval could be improved by implementing a two-stage pipeline, 
+employing a fast approximate top-k candidate search follower by a reranker, as cosine similarity alone doesn't 
+clearly separate relevant from irrelevant documents, as seen in this evaluation. 
 
-## Recommendations
-
-1. **Increase candidate diversity further for multi-passage synthesis**: several multi-passage questions need 2-3 sections from the *same* document (e.g. multiple enemy sub-sections); raising `max_chunks_per_document` from 2 to 3 for the `sentence` strategy specifically would likely help without reintroducing the single-document-crowding problem, since that mainly affects cross-document diversity.
-2. **Replace the pure token-overlap correctness heuristic with an LLM-as-judge pass** once outside the single-day budget - it would catch cases like paraphrased-but-correct answers that score low on raw overlap.
+Other areas of improvement that are apparent, but not as immediate as the previous two are:
+-  Separating this single RAG system into multiple RAG subsystems if the larger dataset remains 
+unbalanced as this sample test one (where one 211KB changelog produced 30% of all the chunks). 
+A first LLM could simply detect the topic of the question and then referring it to the relevant RAG 
+system, or stating it doesn't know the answer if no subsystem is adequate.
+-  Use a LLM-as-a-judge correctness heurestic rather than token overlap. Token overlap was chosen 
+simply due to the single-day scope of this project, but is not an industry best practice.
+- Increase candidate diversity further for multi-passage synthesis. Several multi-passage 
+questions need 2-3 sections from the *same* document (e.g. multiple enemy sub-sections); 
+raising `max_chunks_per_document` from 2 to 3 for the `sentence` strategy specifically would 
+likely help without reintroducing the single-document-crowding problem, 
+since that mainly affects cross-document diversity.
+                
