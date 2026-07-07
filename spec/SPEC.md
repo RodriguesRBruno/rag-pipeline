@@ -13,12 +13,11 @@ This project implements a modular RAG system that retrieves relevant documents f
 ## 2. Dataset & Corpus
 
 ### 2.1 Data Source
-- **Source**: Kaggle "Single Topic RAG Evaluation Dataset" (MIT License). The full upstream dataset is a 9,374-document, single-topic (Enter the Gungeon) corpus with 159 evaluation questions.
-- **What's actually in this repository**: `dataset/` contains a much smaller sample pulled from that same source structure, not the full upstream dataset. All figures in this spec describe that sample, confirmed by inspection in `src/ingestion.py` and `eval/evaluate.py`.
+- **Source**: Kaggle "Single Topic RAG Evaluation Dataset" (MIT License).
+- **Corpus size**: `dataset/` contains 20 documents and 120 evaluation questions (40 per question set). All figures in this spec describe this dataset, confirmed by inspection in `src/ingestion.py` and `eval/evaluate.py`.
 
 ### 2.2 Domain
-- **Nominal topic**: Enter the Gungeon (indie roguelike video game) — this is the origin and namesake of the source dataset.
-- **Actual content**: Only 1 of the 20 documents (`index=0`, "Bullet Kin") is about Enter the Gungeon. The other 19 documents cover unrelated topics — D&D campaign notes, RAG/LLM tooling, cooking, films, GPUs, other video game wikis (e.g. Stardew Valley), and similar. In practice the corpus is a **generic multi-topic retrieval sample**, not a single-topic Gungeon corpus.
+- **Topic mix**: The corpus is mixed-topic. Only 1 of the 20 documents (`index=0`, "Bullet Kin") is about Enter the Gungeon; the other 19 cover unrelated topics — D&D campaign notes, RAG/LLM tooling, cooking, films, GPUs, other video game wikis (e.g. Stardew Valley), and similar.
 - **Content Type**: Wikipedia/Fandom-style and blog-style documentation, mixed in subject matter as described above.
 
 ### 2.3 Dataset Files
@@ -309,7 +308,6 @@ This design allows switching vector stores without modifying retrieval or genera
    source URL. If the specific answer is not present in the context, respond
    exactly: "I don't have this information in my corpus."
    ```
-   An earlier version of this prompt was scoped to "answering questions about Enter the Gungeon," which caused the LLM to refuse to answer using perfectly good retrieved context simply because the topic wasn't Gungeon (19 of 20 documents aren't). See `RESULTS.md` for the measured impact of generalizing it.
 
 3. **Process Response**:
    - Extract generated text
@@ -781,7 +779,7 @@ GENERATION_CONFIG = {
 
 ## 13. References
 
-- **Dataset**: Kaggle "Single Topic RAG Evaluation Dataset" (upstream source; see Section 2.1 for what's actually in this repo)
+- **Dataset**: Kaggle "Single Topic RAG Evaluation Dataset" (see Section 2.1 for dataset details)
 - **Embedding Models**: Sentence-Transformers (https://www.sbert.net/)
 - **Vector DB**: Chroma (https://docs.trychroma.com/)
 - **LLM**: Anthropic Claude (https://docs.anthropic.com/)
@@ -792,4 +790,4 @@ GENERATION_CONFIG = {
 **Document Version**: 2.0
 **Last Updated**: 2026-07-06
 **Author**: RAG Learning Project
-**Status**: Active - Aligned with actual dataset and implementation
+**Status**: Active
