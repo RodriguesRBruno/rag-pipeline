@@ -220,12 +220,7 @@ class ComparisonReporter:
             "affects cross-document diversity.\n"
             "2. **Replace the pure token-overlap correctness heuristic with an LLM-as-judge pass** once "
             "outside the single-day budget - it would catch cases like paraphrased-but-correct answers that "
-            "score low on raw overlap.\n"
-            "3. **Re-balance the corpus** if extending this project: the dataset's mix of unrelated "
-            "topics (D&D notes, RAG tooling, cooking, films) alongside a single real Gungeon document makes "
-            "this a generic small-corpus retrieval benchmark rather than a domain-specific Gungeon QA system; "
-            "sourcing more Gungeon-specific documents would make the single/multi-passage results more "
-            "representative of a Gungeon-focused QA system."
+            "score low on raw overlap."
         )
 
 

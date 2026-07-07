@@ -17,7 +17,7 @@ This project implements a modular RAG system that retrieves relevant documents f
 - **Corpus size**: `dataset/` contains 20 documents and 120 evaluation questions (40 per question set). All figures in this spec describe this dataset, confirmed by inspection in `src/ingestion.py` and `eval/evaluate.py`.
 
 ### 2.2 Domain
-- **Topic mix**: The corpus is mixed-topic. Only 1 of the 20 documents (`index=0`, "Bullet Kin") is about Enter the Gungeon; the other 19 cover unrelated topics — D&D campaign notes, RAG/LLM tooling, cooking, films, GPUs, other video game wikis (e.g. Stardew Valley), and similar.
+- **Topic mix**: The corpus spans a variety of unrelated topics across its 20 documents — D&D campaign notes, RAG/LLM tooling, cooking, films, GPUs, video game wikis, and similar.
 - **Content Type**: Wikipedia/Fandom-style and blog-style documentation, mixed in subject matter as described above.
 
 ### 2.3 Dataset Files
