@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-This is a **single-day RAG (Retrieval-Augmented Generation) pipeline** learning project. The system ingests a small, mixed-topic document corpus (nominally sourced from an Enter the Gungeon documentation dataset, but only 1 of the 20 actual documents is about Enter the Gungeon — see `spec/SPEC.md` section 2.2), chunks it using two strategies, embeds it with two models, stores it in a vector database, and generates grounded, cited answers to user questions regardless of topic.
+This is a **single-day RAG (Retrieval-Augmented Generation) pipeline** learning project. The system ingests a small, mixed-topic document corpus (only 1 of the 20 documents is about Enter the Gungeon — see `spec/SPEC.md` section 2.2), chunks it using two strategies, embeds it with two models, stores it in a vector database, and generates grounded, cited answers to user questions regardless of topic.
 
 **Key Constraint**: All implementation must be completed in a single day (8-10 hours).
 
@@ -40,7 +40,7 @@ rag-pipeline/
 The RAG system flows through 4 modular stages:
 
 ### Stage 1: Ingestion & Chunking
-- Load the documents present in `dataset/documents.csv` (20 documents in this repo's actual dataset, not the 9,374-document upstream Kaggle corpus — see `spec/SPEC.md` section 2)
+- Load the documents present in `dataset/documents.csv` (20 documents — see `spec/SPEC.md` section 2)
 - Implement two distinct chunking strategies:
   1. **Semantic Splitting**: Split by topic/section boundaries (500-800 tokens, 10% overlap)
   2. **Sentence-based**: Split on complete sentences (300-500 tokens, minimal overlap)
@@ -164,7 +164,7 @@ Validate that cited URLs are real (exist in dataset) and contain claimed informa
 
 ## Evaluation Metrics
 
-The system is evaluated on 120 questions across 3 difficulty tiers (40 questions each; see `spec/SPEC.md` section 2 for why this differs from the 159-question upstream Kaggle dataset):
+The system is evaluated on 120 questions across 3 difficulty tiers (40 questions each; see `spec/SPEC.md` section 2 for dataset details):
 
 ### Single-Passage QA (40 questions)
 - Answerable from a single document

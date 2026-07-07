@@ -2,7 +2,7 @@
 
 RAG project for learning using the Kaggle dataset available at https://www.kaggle.com/datasets/samuelmatsuoharris/single-topic-rag-evaluation-dataset
 
-Note: the corpus actually checked into `dataset/` is a small, mixed-topic sample (20 documents, 40 questions per evaluation set) rather than the full 9,374-document, single-topic upstream dataset — see `spec/SPEC.md` section 2 for details.
+Note: the corpus in `dataset/` is a small, mixed-topic sample — 20 documents, 40 questions per evaluation set. See `spec/SPEC.md` section 2 for details.
 
 ## Setup
 
@@ -71,4 +71,4 @@ Evaluation makes one Claude API call per question per combination (4 combos x 12
 - A **larger-corpus write-up** on what would change at 10x/100x scale
 - **Recommendations** for further improving the pipeline
 
-See `spec/SPEC.md` for the full specification, including why the actual dataset (20 documents, 3x 40-question sets) differs from the original Kaggle dataset it's sampled from.
+See `spec/SPEC.md` for the full specification, including dataset details (20 documents, 3x 40-question sets).

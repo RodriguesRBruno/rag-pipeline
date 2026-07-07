@@ -2,10 +2,9 @@
 
 ## Corpus Note
 
-This evaluation runs against the dataset actually present in `dataset/`: **20 documents**
-and **40 questions per question set** (single/multi/no-answer), not the 9,374-document /
-159-question corpus described in the original Kaggle dataset. See `spec/SPEC.md` section 2
-for details. One consequence worth keeping in mind when reading the numbers below:
+This evaluation runs against the dataset in `dataset/`: **20 documents** and **40 questions
+per question set** (single/multi/no-answer). See `spec/SPEC.md` section 2 for details. One
+consequence worth keeping in mind when reading the numbers below:
 
 - Only document index 0 is genuinely about Enter the Gungeon; the other 19 documents cover
   unrelated topics (D&D campaign notes, RAG/LLM tooling, cooking, films, a game changelog,
@@ -19,37 +18,32 @@ small, mixed-topic corpus has no external ground truth for what a "good enough" 
 like on those axes. Precision@5 is not computed at all: with exactly one relevant document
 per question and K=5, it is structurally capped at 0.2 and adds no signal beyond Recall@5.
 
-## Design Changes Made During Evaluation
+## Key Implementation Decisions
 
-Four issues surfaced while building this evaluation and were fixed in `src/`:
+Several corpus-specific properties shape `src/`'s retrieval and generation behavior:
 
-1. **Oversized-document crowding** (`src/retrieval.py`): document index 16 (a 211KB game
-   changelog) produced ~30% of all chunks in both chunking strategies, so its chunks
-   dominated top-5 results for many unrelated queries. `Retriever.retrieve` now pulls a
-   larger candidate pool (20) and caps results to at most 2 chunks per source document
-   before taking the final top-K - still pure cosine-similarity ranking, just restoring
-   document-level diversity. This raised Recall@5 by 5-15 points across combinations.
-2. **Similarity/confidence thresholds recalibrated** (`src/pipeline.py`, `src/generation.py`):
-   with real embeddings on this corpus, top-1 cosine similarity for genuinely correct
-   matches averages ~0.4 and overlaps heavily with no-answer questions' scores (~0.39) -
-   the SPEC.md default of 0.5 would make the system refuse to answer almost everything.
-   Both thresholds were lowered to 0.15 (just filtering pure noise); unanswerable detection
-   now relies primarily on the LLM reading the retrieved text and stating explicitly when
-   the specific fact isn't present, which the corpus's no-answer questions are designed to
-   require (they're topically adjacent, not off-topic).
-3. **System prompt was Gungeon-only** (`src/generation.py`): the original prompt told Claude
-   it was "answering questions about Enter the Gungeon" and to use only Gungeon-relevant
-   context. Since 19 of the 20 actual corpus documents are about unrelated topics (D&D notes,
-   RAG tooling, Stardew Valley, the EU AI Act, etc. - see the corpus note above), Claude was
-   refusing to answer questions it could have answered correctly, purely because the topic
-   wasn't Gungeon. Generalizing the prompt to answer from context "regardless of subject
-   matter" raised single/multi-passage correctness by roughly 20-30 points across combos.
-4. **Citation extraction missed "Source N" references** (`src/generation.py`): the context
+1. **Per-document cap on retrieval results** (`src/retrieval.py`): document index 16 (a 211KB
+   game changelog) accounts for ~30% of all chunks in both chunking strategies, so its chunks
+   would otherwise dominate top-5 results for many unrelated queries. `Retriever.retrieve`
+   pulls a larger candidate pool (20) and caps results to at most 2 chunks per source document
+   before taking the final top-K - still pure cosine-similarity ranking, just preserving
+   document-level diversity.
+2. **Similarity/confidence thresholds calibrated to this corpus** (`src/pipeline.py`,
+   `src/generation.py`): with real embeddings on this corpus, top-1 cosine similarity for
+   genuinely correct matches averages ~0.4 and overlaps heavily with no-answer questions'
+   scores (~0.39), so both thresholds are set to 0.15 (filtering only near-zero noise).
+   Unanswerable detection relies primarily on the LLM reading the retrieved text and stating
+   explicitly when the specific fact isn't present, which the corpus's no-answer questions are
+   designed to require (they're topically adjacent, not off-topic).
+3. **System prompt handles a mixed-topic corpus** (`src/generation.py`): since 19 of the 20
+   corpus documents are about unrelated topics (D&D notes, RAG tooling, Stardew Valley, the
+   EU AI Act, etc. - see the corpus note above), the system prompt answers from context
+   "regardless of subject matter" instead of assuming a single topic, so Claude doesn't refuse
+   to answer questions it can answer correctly just because the topic isn't Enter the Gungeon.
+4. **Citation extraction matches "Source N" references** (`src/generation.py`): the context
    given to Claude labels chunks "Source 1", "Source 2", etc., and Claude usually cites that
-   way rather than repeating the raw URL. `_extract_citations` only recognized literal URLs,
-   so it fell back to "cite every retrieved chunk" almost every time - inflating citation
-   accuracy failures with sources the model never actually referenced. It now also matches
-   `Source N` labels against the same numbering used to build the context.
+   way rather than repeating the raw URL, so `_extract_citations` matches `Source N` labels
+   against the same numbering used to build the context, in addition to literal URLs.
 
 ## Comparison Table
 
@@ -128,4 +122,3 @@ For a 10x larger corpus (~200 documents), the current approach would mostly hold
 
 1. **Increase candidate diversity further for multi-passage synthesis**: several multi-passage questions need 2-3 sections from the *same* document (e.g. multiple enemy sub-sections); raising `max_chunks_per_document` from 2 to 3 for the `sentence` strategy specifically would likely help without reintroducing the single-document-crowding problem, since that mainly affects cross-document diversity.
 2. **Replace the pure token-overlap correctness heuristic with an LLM-as-judge pass** once outside the single-day budget - it would catch cases like paraphrased-but-correct answers that score low on raw overlap.
-3. **Re-balance the corpus** if extending this project: the actual dataset's mix of unrelated topics (D&D notes, RAG tooling, cooking, films) alongside a single real Gungeon document makes this a generic small-corpus retrieval benchmark rather than a domain-specific Gungeon QA system; sourcing more Gungeon-specific documents would make the single/multi-passage results more representative of the original spec's intent.
